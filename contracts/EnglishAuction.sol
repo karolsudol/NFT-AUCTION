@@ -1,39 +1,65 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.17;
 
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract EnglishAuction is IERC721Receiver {
+contract EnglishAuction is
+    IERC721Receiver,
+    ERC721URIStorage,
+    Ownable,
+    ReentrancyGuard
+{
+    struct ListedToken {
+        uint256 ID;
+        IERC721 nft;
+        address payable seller;
+        address payable owner;
+        uint256 endAt;
+        uint256 startAt;
+        address highestBidder;
+        uint highestBid;
+        mapping(address => uint256) bids;
+        uint256 bidsCount;
+        uint256 price;
+        address ERC20;
+        bool listed;
+    }
+
+    // ****************** EVENTS ******************
     event Start();
     event Bid(address indexed sender, uint amount);
     event Withdraw(address indexed bidder, uint amount);
     event End(address winner, uint amount);
 
-    IERC721 public nft;
-    uint public nftId;
+    // ****************** VARS ******************
 
-    address payable public seller;
-    uint public endAt;
-    bool public started;
-    bool public ended;
+    using Counters for Counters.Counter;
+    Counters.Counter private _tokenIds;
+    Counters.Counter private _itemsSold;
+    address payable contractsowner;
+    uint256 adminFee = 0.01 ether;
 
-    address public highestBidder;
-    uint public highestBid;
-    mapping(address => uint) public bids;
+    mapping(uint256 => ListedToken) private idToListedToken;
 
-    constructor(
-        address _nft,
-        uint _nftId,
-        uint _startingBid
-    ) {
-        nft = IERC721(_nft);
-        nftId = _nftId;
-
-        seller = payable(msg.sender);
-        highestBid = _startingBid;
+    constructor() ERC721("EnglishAuction", "EAU") {
+        contractsowner = payable(msg.sender);
     }
 
+    // ****************** PUBLIC FUNCTIONS ******************
+
+    /**
+     * ERC721TokenReceiver interface function. Hook that will be triggered on safeTransferFrom as per EIP-721.
+     * It should execute a deposit for `_from` address.
+     * After deposit this token can be either returned back to the owner, or placed on auction.
+     * It should emit an event that will let the user know that the deposit is successful.
+     * It is mandatory to call ERC721 contract back to check if a token is received by auction (require ownerOf(nftId) to be equal address(this))
+     */
     function onERC721Received(
         address,
         address,
@@ -41,55 +67,5 @@ contract EnglishAuction is IERC721Receiver {
         bytes calldata
     ) external pure returns (bytes4) {
         return IERC721Receiver.onERC721Received.selector;
-    }
-
-    function start() external {
-        require(!started, "started");
-        require(msg.sender == seller, "not seller");
-
-        nft.transferFrom(msg.sender, address(this), nftId);
-        started = true;
-        endAt = block.timestamp + 7 days;
-
-        emit Start();
-    }
-
-    function bid() external payable {
-        require(started, "not started");
-        require(block.timestamp < endAt, "ended");
-        require(msg.value > highestBid, "value < highest");
-
-        if (highestBidder != address(0)) {
-            bids[highestBidder] += highestBid;
-        }
-
-        highestBidder = msg.sender;
-        highestBid = msg.value;
-
-        emit Bid(msg.sender, msg.value);
-    }
-
-    function withdraw() external {
-        uint bal = bids[msg.sender];
-        bids[msg.sender] = 0;
-        payable(msg.sender).transfer(bal);
-
-        emit Withdraw(msg.sender, bal);
-    }
-
-    function end() external {
-        require(started, "not started");
-        require(block.timestamp >= endAt, "not ended");
-        require(!ended, "ended");
-
-        ended = true;
-        if (highestBidder != address(0)) {
-            nft.safeTransferFrom(address(this), highestBidder, nftId);
-            seller.transfer(highestBid);
-        } else {
-            nft.safeTransferFrom(address(this), seller, nftId);
-        }
-
-        emit End(highestBidder, highestBid);
     }
 }
