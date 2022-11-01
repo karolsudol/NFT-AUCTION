@@ -18,29 +18,38 @@ interface ITest {
     function isERC721(address nftAddress) external returns (bool);
 }
 
+contract EnglishAuctionNFT is ERC721URIStorage {
+    using Counters for Counters.Counter;
+    Counters.Counter private _tokenIds;
+    address public contractAddress;
+
+    constructor(address englishAuctionAddress)
+        ERC721("English Auction", "EAU")
+    {
+        contractAddress = englishAuctionAddress;
+    }
+
+    function createToken(address owner, string memory tokenURI)
+        public
+        returns (uint256)
+    {
+        require(msg.sender == contractAddress, "non admin mints not allowed");
+
+        _tokenIds.increment();
+        uint256 newItemId = _tokenIds.current();
+
+        _mint(owner, newItemId);
+        _setTokenURI(newItemId, tokenURI);
+        return newItemId;
+    }
+}
+
 contract EnglishAuction is
     IERC721Receiver,
     ERC721URIStorage,
     Ownable,
     ReentrancyGuard
 {
-    struct ListedToken {
-        uint256 ID;
-        address payable seller;
-        address payable owner;
-        uint256 endAt;
-        uint256 startAt;
-        address highestBidder;
-        uint highestBid;
-        mapping(address => uint256) bids;
-        uint256 bidsCount;
-        uint256 price;
-        string currrency;
-        address ERC20;
-        address NFT;
-        bool listed;
-    }
-
     // ****************** EVENTS ******************
     event Start();
     event Bid(address indexed sender, uint amount);
@@ -50,18 +59,19 @@ contract EnglishAuction is
     // ****************** VARS ******************
 
     using Counters for Counters.Counter;
-    Counters.Counter private _tokenIDs;
-    Counters.Counter private _itemsSold;
+    Counters.Counter private _assetsIDs;
+    Counters.Counter private _assetsSold;
     address payable contractsOwner;
     uint256 adminFee = 0.01 ether;
+    EnglishAuctionNFT public nft;
 
-    mapping(uint256 => ListedToken) private idToListedToken;
+    mapping(uint256 => Asset) private _auctionAssets;
 
     constructor() ERC721("EnglishAuction", "EAU") {
         contractsOwner = payable(msg.sender);
     }
 
-    // ****************** PUBLIC FUNCTIONS ******************
+    // ****************** RECEIVER ******************
 
     /**
      * ERC721TokenReceiver interface function. Hook that will be triggered on safeTransferFrom as per EIP-721.
@@ -79,6 +89,8 @@ contract EnglishAuction is
         return IERC721Receiver.onERC721Received.selector;
     }
 
+    // ****************** VERIFY CONTRACT's TYPE ******************
+
     using ERC165Checker for address;
     bytes4 public constant IID_ITEST = type(ITest).interfaceId;
     bytes4 public constant IID_IERC165 = type(IERC165).interfaceId;
@@ -89,7 +101,7 @@ contract EnglishAuction is
         return nftAddress.supportsInterface(IID_IERC1155);
     }
 
-    function isERC721(address nftAddress) external view returns (bool) {
+    function isERC721(address nftAddress) private view returns (bool) {
         return nftAddress.supportsInterface(IID_IERC721);
     }
 
@@ -103,6 +115,8 @@ contract EnglishAuction is
         return interfaceId == IID_ITEST || interfaceId == IID_IERC165;
     }
 
+    // ****************** PUBLIC FUNCTIONS ******************
+
     /**
      *  list on auction NFT that msg.sender has deposited with safeTransferFrom.
      *  Users willing to list their NFT are free to choose any ERC20 token for bids.
@@ -110,5 +124,43 @@ contract EnglishAuction is
      *  During the auction there should be no way for NFT to leave the contract - it should be locked on contract.
      *  One NFT can participate in only one auction.
      */
-    function listToken(uint256 _tokenId, uint256 minBid) external {}
+    function listAsset(
+        uint256 _assetID,
+        address _tokenContractERC20,
+        uint256 _minBid,
+        uint256 _startAt,
+        uint256 _endAt
+    ) external nonReentrant {
+        // require(isERC721(_NFT) == true, "not an ERC721");
+        require(nft.ownerOf(_assetID) == msg.sender, "only owner");
+        require(_startAt > block.timestamp, "future start only");
+        require(_endAt > _startAt, "ends after starts only");
+
+        nft.safeTransferFrom(msg.sender, address(this), _assetID);
+
+        _auctionAssets[_assetID].ID = _assetID;
+        _auctionAssets[_assetID].minBid = _minBid;
+        _auctionAssets[_assetID].tokenPayable = _tokenContractERC20;
+        _auctionAssets[_assetID].seller = payable(msg.sender);
+        _auctionAssets[_assetID].startAt = _startAt;
+        _auctionAssets[_assetID].endAt = _endAt;
+        _auctionAssets[_assetID].listed = true;
+    }
+
+    struct Asset {
+        uint256 ID;
+        uint256 minBid;
+        address tokenPayable;
+        address payable seller;
+        uint256 startAt;
+        uint256 endAt;
+        bool listed;
+        address highestBidder;
+        uint256 highestBid;
+        mapping(address => uint256) bids;
+        uint256 bidsCount;
+        uint256 priceSold;
+        address NFT;
+        address payable buyer;
+    }
 }
