@@ -64,6 +64,7 @@ contract EnglishAuction is
     address payable contractsOwner;
     uint256 adminFee = 0.01 ether;
     EnglishAuctionNFT public nft;
+    IERC20 public token;
 
     mapping(uint256 => Asset) private _auctionAssets;
 
@@ -147,6 +148,43 @@ contract EnglishAuction is
         _auctionAssets[_assetID].listed = true;
     }
 
+    /**
+     * should take from user ERC20 tokens specified in listOnAuction function for specific NFT (address+tokenId).
+     * Function should revert if bid is placed out of auction effective time range specified in listNFTOnAuction.
+     * Bid cannot be reverted, once tokens are deposited, they can be only returned when bidder loses.
+     */
+    function placeBid(uint256 _assetID, uint256 _bid) public nonReentrant {
+        require(_auctionAssets[_assetID].listed == true, "asset not listed");
+        require(
+            _auctionAssets[_assetID].startAt <= block.timestamp,
+            "auction yet to start"
+        );
+        require(
+            _auctionAssets[_assetID].endAt >= block.timestamp,
+            "auction ended"
+        );
+        require(
+            _auctionAssets[_assetID].highestBid < _bid,
+            "last bid is higher"
+        );
+        require(_auctionAssets[_assetID].minBid < _bid, "min bid is higher");
+
+        token = IERC20(_auctionAssets[_assetID].tokenPayable);
+
+        if (_auctionAssets[_assetID].highestBidder != address(0)) {
+            token.transfer(
+                _auctionAssets[_assetID].highestBidder,
+                _auctionAssets[_assetID].highestBid
+            );
+        }
+
+        token.transferFrom(msg.sender, address(this), _bid);
+
+        _auctionAssets[_assetID].highestBid = _bid;
+        _auctionAssets[_assetID].highestBidder = msg.sender;
+        _auctionAssets[_assetID].bidsCount++;
+    }
+
     struct Asset {
         uint256 ID;
         uint256 minBid;
@@ -157,9 +195,7 @@ contract EnglishAuction is
         bool listed;
         address highestBidder;
         uint256 highestBid;
-        mapping(address => uint256) bids;
         uint256 bidsCount;
-        uint256 priceSold;
         address NFT;
         address payable buyer;
     }
