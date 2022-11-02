@@ -181,8 +181,60 @@ contract EnglishAuction is
         token.transferFrom(msg.sender, address(this), _bid);
 
         _auctionAssets[_assetID].highestBid = _bid;
-        _auctionAssets[_assetID].highestBidder = msg.sender;
+        _auctionAssets[_assetID].highestBidder = payable(msg.sender);
         _auctionAssets[_assetID].bidsCount++;
+    }
+
+    /**
+     * can be called by anyone on blockchain after auction end UTC timestamp is reached.
+     * Function should summarize auction results, transfer winning amount of ERC20 tokens to the auction issuer and unlock NFT for withdrawal
+     * or placing on auction again only for the auction winner.
+     * Note, that if the auction is finished without any single bid,
+     * it should not make any ERC20 token transfer and let the auction issuer withdraw the token or start auction again.
+     */
+    function finishAuction(uint256 _assetID) public nonReentrant {
+        require(
+            _auctionAssets[_assetID].endAt < block.timestamp,
+            "auction in progress"
+        );
+
+        require(_auctionAssets[_assetID].listed, "non listed asset");
+
+        token = IERC20(_auctionAssets[_assetID].tokenPayable);
+
+        // address _oldOwner = _itemsListed[_tokenId].owner;
+
+        if (
+            _auctionAssets[_assetID].highestBid >
+            _auctionAssets[_assetID].minBid
+        ) {
+            nft.safeTransferFrom(
+                address(this),
+                _auctionAssets[_assetID].highestBidder,
+                _assetID
+            );
+            token.transfer(
+                _auctionAssets[_assetID].seller,
+                _auctionAssets[_assetID].highestBid
+            );
+            _auctionAssets[_assetID].buyer = _auctionAssets[_assetID]
+                .highestBidder;
+            _auctionAssets[_assetID].listed = false;
+            // emit AuctionFinished(_oldOwner, _newOwner, _tokenId);
+        } else {
+            withdrawNft(_assetID);
+            // emit AuctionFinished(_oldOwner, _newOwner, _tokenId);nId);
+        }
+    }
+
+    function withdrawNft(uint256 _assetID) private {
+        nft.safeTransferFrom(
+            address(this),
+            _auctionAssets[_assetID].seller,
+            _assetID
+        );
+        _auctionAssets[_assetID].seller = _auctionAssets[_assetID].buyer;
+        _auctionAssets[_assetID].listed = false;
     }
 
     struct Asset {
@@ -193,7 +245,7 @@ contract EnglishAuction is
         uint256 startAt;
         uint256 endAt;
         bool listed;
-        address highestBidder;
+        address payable highestBidder;
         uint256 highestBid;
         uint256 bidsCount;
         address NFT;
