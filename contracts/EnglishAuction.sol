@@ -50,11 +50,54 @@ contract EnglishAuction is
     Ownable,
     ReentrancyGuard
 {
+    struct Asset {
+        uint256 ID;
+        uint256 minBid;
+        address tokenPayable;
+        address payable seller;
+        uint256 startAt;
+        uint256 endAt;
+        bool listed;
+        address payable highestBidder;
+        uint256 highestBid;
+        uint256 bidsCount;
+        address NFT;
+        address payable buyer;
+    }
+
     // ****************** EVENTS ******************
-    event Start();
-    event Bid(address indexed sender, uint amount);
-    event Withdraw(address indexed bidder, uint amount);
-    event End(address winner, uint amount);
+    event AssetListed(
+        address indexed seller,
+        uint256 indexed ID,
+        uint256 minBid,
+        address token
+    );
+    event AssetDeListed(uint256 indexed ID);
+    event Bid(
+        address indexed bidder,
+        uint256 indexed ID,
+        uint256 bid,
+        address token
+    );
+    event BidReturn(
+        address indexed bidder,
+        uint256 indexed ID,
+        uint256 amount,
+        address token
+    );
+    event Withdraw(uint256 indexed ID, address indexed seller);
+    event Sale(
+        uint256 indexed ID,
+        address buyer,
+        uint256 amount,
+        address token
+    );
+
+    event TransferReceivedToken(address _from, uint256 _amount, address token);
+    event TransferSentToken(address _destAddr, uint256 _amount, address token);
+
+    event TransferReceivedNFT(address _from, uint256 ID);
+    event TransferSentNFT(address _destAddr, uint256 ID);
 
     // ****************** VARS ******************
 
@@ -138,6 +181,7 @@ contract EnglishAuction is
         require(_endAt > _startAt, "ends after starts only");
 
         nft.safeTransferFrom(msg.sender, address(this), _assetID);
+        emit TransferReceivedNFT(msg.sender, _assetID);
 
         _auctionAssets[_assetID].ID = _assetID;
         _auctionAssets[_assetID].minBid = _minBid;
@@ -146,6 +190,8 @@ contract EnglishAuction is
         _auctionAssets[_assetID].startAt = _startAt;
         _auctionAssets[_assetID].endAt = _endAt;
         _auctionAssets[_assetID].listed = true;
+
+        emit AssetListed(msg.sender, _assetID, _minBid, _tokenContractERC20);
     }
 
     /**
@@ -176,13 +222,36 @@ contract EnglishAuction is
                 _auctionAssets[_assetID].highestBidder,
                 _auctionAssets[_assetID].highestBid
             );
+            emit TransferSentToken(
+                _auctionAssets[_assetID].highestBidder,
+                _auctionAssets[_assetID].highestBid,
+                _auctionAssets[_assetID].tokenPayable
+            );
+            emit BidReturn(
+                _auctionAssets[_assetID].highestBidder,
+                _assetID,
+                _auctionAssets[_assetID].highestBid,
+                _auctionAssets[_assetID].tokenPayable
+            );
         }
 
         token.transferFrom(msg.sender, address(this), _bid);
+        emit TransferReceivedToken(
+            msg.sender,
+            _bid,
+            _auctionAssets[_assetID].tokenPayable
+        );
 
         _auctionAssets[_assetID].highestBid = _bid;
         _auctionAssets[_assetID].highestBidder = payable(msg.sender);
         _auctionAssets[_assetID].bidsCount++;
+
+        emit Bid(
+            msg.sender,
+            _assetID,
+            _bid,
+            _auctionAssets[_assetID].tokenPayable
+        );
     }
 
     /**
@@ -202,8 +271,6 @@ contract EnglishAuction is
 
         token = IERC20(_auctionAssets[_assetID].tokenPayable);
 
-        // address _oldOwner = _itemsListed[_tokenId].owner;
-
         if (
             _auctionAssets[_assetID].highestBid >
             _auctionAssets[_assetID].minBid
@@ -213,42 +280,50 @@ contract EnglishAuction is
                 _auctionAssets[_assetID].highestBidder,
                 _assetID
             );
+            emit TransferSentNFT(
+                _auctionAssets[_assetID].highestBidder,
+                _assetID
+            );
+
             token.transfer(
                 _auctionAssets[_assetID].seller,
                 _auctionAssets[_assetID].highestBid
             );
+            emit TransferSentToken(
+                _auctionAssets[_assetID].seller,
+                _auctionAssets[_assetID].highestBid,
+                _auctionAssets[_assetID].tokenPayable
+            );
+
             _auctionAssets[_assetID].buyer = _auctionAssets[_assetID]
                 .highestBidder;
             _auctionAssets[_assetID].listed = false;
-            // emit AuctionFinished(_oldOwner, _newOwner, _tokenId);
+            emit Sale(
+                _assetID,
+                _auctionAssets[_assetID].highestBidder,
+                _auctionAssets[_assetID].highestBid,
+                _auctionAssets[_assetID].tokenPayable
+            );
         } else {
             withdrawNft(_assetID);
-            // emit AuctionFinished(_oldOwner, _newOwner, _tokenId);nId);
+            emit Withdraw(_assetID, _auctionAssets[_assetID].seller);
         }
     }
 
+    /**
+     *  transfers NFT to its owner. Owner of NFT is an address who has deposited an NFT and never placed it on auction,
+     *  or deposited an NFT and placed on auction that didn’t receive any at least minimum bid,
+     *   or auction winner that didn’t place his earned NFT on auction. During the auction NFT can’t be withdrawn.
+     */
     function withdrawNft(uint256 _assetID) private {
         nft.safeTransferFrom(
             address(this),
             _auctionAssets[_assetID].seller,
             _assetID
         );
+        emit TransferSentNFT(_auctionAssets[_assetID].seller, _assetID);
+
         _auctionAssets[_assetID].seller = _auctionAssets[_assetID].buyer;
         _auctionAssets[_assetID].listed = false;
-    }
-
-    struct Asset {
-        uint256 ID;
-        uint256 minBid;
-        address tokenPayable;
-        address payable seller;
-        uint256 startAt;
-        uint256 endAt;
-        bool listed;
-        address payable highestBidder;
-        uint256 highestBid;
-        uint256 bidsCount;
-        address NFT;
-        address payable buyer;
     }
 }
