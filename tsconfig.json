@@ -7,4 +7,6 @@
     "strict": true,
     "skipLibCheck": true
   }
+  // "include": ["./scripts", "./test", "./typechain"],
+  // "files": ["./hardhat.config.ts"]
 }

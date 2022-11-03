@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.17;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
@@ -11,37 +10,13 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import "@openzeppelin/contracts/utils/introspection/ERC165Checker.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "./TokenERC721.sol";
 
 interface ITest {
     function isERC1155(address nftAddress) external returns (bool);
 
     function isERC721(address nftAddress) external returns (bool);
-}
-
-contract EnglishAuctionNFT is ERC721URIStorage {
-    using Counters for Counters.Counter;
-    Counters.Counter private _tokenIds;
-    address public contractAddress;
-
-    constructor(address englishAuctionAddress)
-        ERC721("English Auction", "EAU")
-    {
-        contractAddress = englishAuctionAddress;
-    }
-
-    function createToken(address owner, string memory tokenURI)
-        public
-        returns (uint256)
-    {
-        require(msg.sender == contractAddress, "non admin mints not allowed");
-
-        _tokenIds.increment();
-        uint256 newItemId = _tokenIds.current();
-
-        _mint(owner, newItemId);
-        _setTokenURI(newItemId, tokenURI);
-        return newItemId;
-    }
 }
 
 contract EnglishAuction is
@@ -106,7 +81,7 @@ contract EnglishAuction is
     Counters.Counter private _assetsSold;
     address payable contractsOwner;
     uint256 adminFee = 0.01 ether;
-    EnglishAuctionNFT public nft;
+    TokenERC721 public nft;
     IERC20 public token;
 
     mapping(uint256 => Asset) private _auctionAssets;
