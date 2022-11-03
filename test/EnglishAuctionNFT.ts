@@ -8,7 +8,7 @@ describe("EnglishAuction", function () {
   async function deployEnglishAuction() {
     const ONE_DAY_IN_SECS = 24 * 60 * 60;
     const TEN_DAYS_IN_SECS = 10 * 24 * 60 * 60;
-    const startAt = await time.latest();
+    const startAt = (await time.latest()) + ONE_DAY_IN_SECS;
     const endAt = (await time.latest()) + TEN_DAYS_IN_SECS;
 
     const [owner, acc1, acc2, acc3] = await ethers.getSigners();
@@ -20,13 +20,13 @@ describe("EnglishAuction", function () {
     const nft = await NFT.deploy();
 
     const Auction = await ethers.getContractFactory("EnglishAuction");
-    const auction = await Auction.deploy(nft.address);
+    const auction = await Auction.deploy();
 
     return { auction, token, nft, owner, acc1, acc2, acc3, startAt, endAt };
   }
 
   describe("list asset", function () {
-    it("Should list an asset correctly", async function () {
+    it.only("Should list an asset correctly", async function () {
       const { token, auction, nft, owner, acc1, startAt, endAt } =
         await loadFixture(deployEnglishAuction);
 
@@ -34,9 +34,34 @@ describe("EnglishAuction", function () {
 
       await nft.connect(owner).safeMint(acc1.address, assetID_1);
 
-      await auction
-        .connect(acc1)
-        .listAsset(assetID_1, token.address, 10, startAt, endAt);
+      await expect(
+        auction
+          .connect(acc1)
+          .listAsset(
+            assetID_1,
+            token.address,
+            nft.address,
+            10,
+            await time.latest(),
+            endAt
+          )
+      ).to.be.revertedWith("future start only");
+
+      // await expect(
+      //   auction
+      //     .connect(acc1)
+      //     .listAsset(assetID_1, token.address, nft.address, 10, startAt, endAt)
+      // ).to.be.revertedWith("ERC721: caller is not token owner nor approved");
+
+      // await nft.connect(owner).transferOwnership(acc1.address);
+
+      // const listAssetTX = await auction
+      //   .connect(acc1)
+      //   .listAsset(assetID_1, token.address, 10, startAt, endAt);
+
+      // await expect(listAssetTX)
+      //   .to.emit(auction, "TransferReceivedNFT")
+      //   .withArgs(acc1.address, assetID_1);
 
       // await expect(tx1)
       //   .to.emit(auction, "AssetListed")

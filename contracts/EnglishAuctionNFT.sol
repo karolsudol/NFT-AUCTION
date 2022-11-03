@@ -13,14 +13,14 @@ import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./TokenERC721.sol";
 
+// import "hardhat/console.sol";
+
 interface ITest {
     function isERC1155(address nftAddress) external returns (bool);
 
     function isERC721(address nftAddress) external returns (bool);
 }
 
-// IERC721Receiver,
-// ERC721URIStorage,
 contract EnglishAuction is Ownable, ReentrancyGuard {
     struct Asset {
         uint256 ID;
@@ -35,6 +35,7 @@ contract EnglishAuction is Ownable, ReentrancyGuard {
         uint256 bidsCount;
         address NFT;
         address payable buyer;
+        address nftAddress;
     }
 
     // ****************** EVENTS ******************
@@ -83,9 +84,8 @@ contract EnglishAuction is Ownable, ReentrancyGuard {
 
     mapping(uint256 => Asset) private _auctionAssets;
 
-    constructor(address _nftContract) {
+    constructor() {
         contractsOwner = payable(msg.sender);
-        nft = TokenERC721(_nftContract);
     }
 
     // ****************** RECEIVER ******************
@@ -106,7 +106,7 @@ contract EnglishAuction is Ownable, ReentrancyGuard {
         return IERC721Receiver.onERC721Received.selector;
     }
 
-    // ****************** VERIFY CONTRACT's TYPE ******************
+    // // ****************** VERIFY CONTRACT's TYPE ******************
 
     using ERC165Checker for address;
     bytes4 public constant IID_ITEST = type(ITest).interfaceId;
@@ -131,6 +131,10 @@ contract EnglishAuction is Ownable, ReentrancyGuard {
         return interfaceId == IID_ITEST || interfaceId == IID_IERC165;
     }
 
+    function setNFTcontract(address _nftAddress) private {
+        nft = TokenERC721(_nftAddress);
+    }
+
     // ****************** PUBLIC FUNCTIONS ******************
 
     /**
@@ -143,14 +147,17 @@ contract EnglishAuction is Ownable, ReentrancyGuard {
     function listAsset(
         uint256 _assetID,
         address _tokenContractERC20,
+        address _nftAddress,
         uint256 _minBid,
         uint256 _startAt,
         uint256 _endAt
     ) external nonReentrant {
-        // require(isERC721(_NFT) == true, "not an ERC721");
         require(nft.ownerOf(_assetID) == msg.sender, "only owner");
         require(_startAt > block.timestamp, "future start only");
         require(_endAt > _startAt, "ends after starts only");
+        require(isERC721(_nftAddress), "not an ERC721");
+
+        setNFTcontract(_nftAddress);
 
         nft.safeTransferFrom(msg.sender, address(this), _assetID);
 
@@ -161,6 +168,7 @@ contract EnglishAuction is Ownable, ReentrancyGuard {
         _auctionAssets[_assetID].startAt = _startAt;
         _auctionAssets[_assetID].endAt = _endAt;
         _auctionAssets[_assetID].listed = true;
+        _auctionAssets[_assetID].nftAddress = _nftAddress;
 
         emit TransferReceivedNFT(msg.sender, _assetID);
         emit AssetListed(msg.sender, _assetID, _minBid, _tokenContractERC20);
@@ -288,6 +296,7 @@ contract EnglishAuction is Ownable, ReentrancyGuard {
      *   or auction winner that didn’t place his earned NFT on auction. During the auction NFT can’t be withdrawn.
      */
     function withdrawNft(uint256 _assetID) private {
+        setNFTcontract(_auctionAssets[_assetID].nftAddress);
         nft.safeTransferFrom(
             address(this),
             _auctionAssets[_assetID].seller,
