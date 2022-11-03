@@ -19,12 +19,9 @@ interface ITest {
     function isERC721(address nftAddress) external returns (bool);
 }
 
-contract EnglishAuction is
-    IERC721Receiver,
-    ERC721URIStorage,
-    Ownable,
-    ReentrancyGuard
-{
+// IERC721Receiver,
+// ERC721URIStorage,
+contract EnglishAuction is Ownable, ReentrancyGuard {
     struct Asset {
         uint256 ID;
         uint256 minBid;
@@ -86,8 +83,9 @@ contract EnglishAuction is
 
     mapping(uint256 => Asset) private _auctionAssets;
 
-    constructor() ERC721("EnglishAuction", "EAU") {
+    constructor(address _nftContract) {
         contractsOwner = payable(msg.sender);
+        nft = TokenERC721(_nftContract);
     }
 
     // ****************** RECEIVER ******************
@@ -128,7 +126,6 @@ contract EnglishAuction is
         public
         view
         virtual
-        override
         returns (bool)
     {
         return interfaceId == IID_ITEST || interfaceId == IID_IERC165;
@@ -156,7 +153,6 @@ contract EnglishAuction is
         require(_endAt > _startAt, "ends after starts only");
 
         nft.safeTransferFrom(msg.sender, address(this), _assetID);
-        emit TransferReceivedNFT(msg.sender, _assetID);
 
         _auctionAssets[_assetID].ID = _assetID;
         _auctionAssets[_assetID].minBid = _minBid;
@@ -166,6 +162,7 @@ contract EnglishAuction is
         _auctionAssets[_assetID].endAt = _endAt;
         _auctionAssets[_assetID].listed = true;
 
+        emit TransferReceivedNFT(msg.sender, _assetID);
         emit AssetListed(msg.sender, _assetID, _minBid, _tokenContractERC20);
     }
 

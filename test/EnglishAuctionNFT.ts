@@ -6,20 +6,21 @@ import { ethers } from "hardhat";
 
 describe("EnglishAuction", function () {
   async function deployEnglishAuction() {
-    const ONE_YEAR_IN_SECS = 365 * 24 * 60 * 60;
-    const startAt = (await time.latest()) + ONE_YEAR_IN_SECS;
-    const endAt = (await time.latest()) + ONE_YEAR_IN_SECS * 2;
+    const ONE_DAY_IN_SECS = 24 * 60 * 60;
+    const TEN_DAYS_IN_SECS = 10 * 24 * 60 * 60;
+    const startAt = await time.latest();
+    const endAt = (await time.latest()) + TEN_DAYS_IN_SECS;
 
     const [owner, acc1, acc2, acc3] = await ethers.getSigners();
 
     const Token = await ethers.getContractFactory("TokenERC20");
     const token = await Token.deploy();
 
-    const Auction = await ethers.getContractFactory("EnglishAuction");
-    const auction = await Auction.deploy();
-
     const NFT = await ethers.getContractFactory("TokenERC721");
     const nft = await NFT.deploy();
+
+    const Auction = await ethers.getContractFactory("EnglishAuction");
+    const auction = await Auction.deploy(nft.address);
 
     return { auction, token, nft, owner, acc1, acc2, acc3, startAt, endAt };
   }
@@ -33,9 +34,9 @@ describe("EnglishAuction", function () {
 
       await nft.connect(owner).safeMint(acc1.address, assetID_1);
 
-      // await auction
-      //   .connect(acc1.address)
-      //   .listAsset(1, token.address, 10, startAt, endAt);
+      await auction
+        .connect(acc1)
+        .listAsset(assetID_1, token.address, 10, startAt, endAt);
 
       // await expect(tx1)
       //   .to.emit(auction, "AssetListed")
