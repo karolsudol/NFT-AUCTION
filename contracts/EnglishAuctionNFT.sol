@@ -13,7 +13,7 @@ import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./TokenERC721.sol";
 
-// import "hardhat/console.sol";
+import "hardhat/console.sol";
 
 interface ITest {
     function isERC1155(address nftAddress) external returns (bool);
@@ -152,12 +152,12 @@ contract EnglishAuction is Ownable, ReentrancyGuard {
         uint256 _startAt,
         uint256 _endAt
     ) external nonReentrant {
-        require(nft.ownerOf(_assetID) == msg.sender, "only owner");
         require(_startAt > block.timestamp, "future start only");
         require(_endAt > _startAt, "ends after starts only");
         require(isERC721(_nftAddress), "not an ERC721");
 
         setNFTcontract(_nftAddress);
+        require(nft.ownerOf(_assetID) == msg.sender, "only owner");
 
         nft.safeTransferFrom(msg.sender, address(this), _assetID);
 

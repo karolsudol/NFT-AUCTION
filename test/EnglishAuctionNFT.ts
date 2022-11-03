@@ -2,7 +2,6 @@ import { time, loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { expect } from "chai";
 import { ethers } from "hardhat";
-// import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 describe("EnglishAuction", function () {
   async function deployEnglishAuction() {
@@ -26,7 +25,7 @@ describe("EnglishAuction", function () {
   }
 
   describe("list asset", function () {
-    it.only("Should list an asset correctly", async function () {
+    it("Should list an asset correctly", async function () {
       const { token, auction, nft, owner, acc1, startAt, endAt } =
         await loadFixture(deployEnglishAuction);
 
@@ -34,8 +33,8 @@ describe("EnglishAuction", function () {
 
       await nft.connect(owner).safeMint(acc1.address, assetID_1);
 
-      await expect(
-        auction
+      expect(
+        await auction
           .connect(acc1)
           .listAsset(
             assetID_1,
@@ -47,27 +46,27 @@ describe("EnglishAuction", function () {
           )
       ).to.be.revertedWith("future start only");
 
-      // await expect(
-      //   auction
-      //     .connect(acc1)
-      //     .listAsset(assetID_1, token.address, nft.address, 10, startAt, endAt)
-      // ).to.be.revertedWith("ERC721: caller is not token owner nor approved");
+      await expect(
+        await auction
+          .connect(acc1)
+          .listAsset(assetID_1, token.address, nft.address, 10, startAt, endAt)
+      ).to.be.revertedWith("ERC721: caller is not token owner nor approved");
 
-      // await nft.connect(owner).transferOwnership(acc1.address);
+      console.log(nft.address);
 
-      // const listAssetTX = await auction
-      //   .connect(acc1)
-      //   .listAsset(assetID_1, token.address, 10, startAt, endAt);
+      await nft.connect(owner).transferOwnership(acc1.address);
 
-      // await expect(listAssetTX)
-      //   .to.emit(auction, "TransferReceivedNFT")
-      //   .withArgs(acc1.address, assetID_1);
+      const listAssetTX = await auction
+        .connect(acc1)
+        .listAsset(assetID_1, token.address, nft.address, 10, startAt, endAt);
 
-      // await expect(tx1)
-      //   .to.emit(auction, "AssetListed")
-      //   .withArgs(acc1.address, 1, 10, token.address);
+      await expect(listAssetTX)
+        .to.emit(auction, "TransferReceivedNFT")
+        .withArgs(acc1.address, assetID_1);
 
-      // expect(await lock.unlockTime()).to.equal(unlockTime);
+      await expect(listAssetTX)
+        .to.emit(auction, "AssetListed")
+        .withArgs(acc1.address, 1, 10, token.address);
     });
   });
 });
