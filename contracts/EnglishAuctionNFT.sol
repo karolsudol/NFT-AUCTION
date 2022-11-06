@@ -26,16 +26,15 @@ contract EnglishAuction is Ownable, ReentrancyGuard {
         uint256 ID;
         uint256 minBid;
         address tokenPayable;
-        address payable seller;
+        address seller;
         uint256 startAt;
         uint256 endAt;
         bool listed;
-        address payable highestBidder;
+        address highestBidder;
         uint256 highestBid;
         uint256 bidsCount;
         address NFT;
-        address payable buyer;
-        address nftAddress;
+        address buyer;
     }
 
     // ****************** EVENTS ******************
@@ -77,15 +76,15 @@ contract EnglishAuction is Ownable, ReentrancyGuard {
     using Counters for Counters.Counter;
     Counters.Counter private _assetsIDs;
     Counters.Counter private _assetsSold;
-    address payable contractsOwner;
-    uint256 adminFee = 0.01 ether;
+    address contractsOwner;
+    // uint256 adminFee = 0.01 ether;
     TokenERC721 public nft;
     IERC20 public token;
 
     mapping(uint256 => Asset) private _auctionAssets;
 
     constructor() {
-        contractsOwner = payable(msg.sender);
+        contractsOwner = msg.sender;
     }
 
     // ****************** RECEIVER ******************
@@ -114,7 +113,7 @@ contract EnglishAuction is Ownable, ReentrancyGuard {
     bytes4 public constant IID_IERC1155 = type(IERC1155).interfaceId;
     bytes4 public constant IID_IERC721 = type(IERC721).interfaceId;
 
-    function isERC1155(address nftAddress) external view returns (bool) {
+    function isERC1155(address nftAddress) private view returns (bool) {
         return nftAddress.supportsInterface(IID_IERC1155);
     }
 
@@ -129,10 +128,6 @@ contract EnglishAuction is Ownable, ReentrancyGuard {
         returns (bool)
     {
         return interfaceId == IID_ITEST || interfaceId == IID_IERC165;
-    }
-
-    function setNFTcontract(address _nftAddress) private {
-        nft = TokenERC721(_nftAddress);
     }
 
     // ****************** PUBLIC FUNCTIONS ******************
@@ -155,8 +150,9 @@ contract EnglishAuction is Ownable, ReentrancyGuard {
         require(_startAt > block.timestamp, "future start only");
         require(_endAt > _startAt, "ends after starts only");
         require(isERC721(_nftAddress), "not an ERC721");
+        // require(!isERC1155(_nftAddress), "not an ERC1155");
 
-        setNFTcontract(_nftAddress);
+        nft = TokenERC721(_nftAddress);
         require(nft.ownerOf(_assetID) == msg.sender, "only owner");
 
         nft.safeTransferFrom(msg.sender, address(this), _assetID);
@@ -164,11 +160,11 @@ contract EnglishAuction is Ownable, ReentrancyGuard {
         _auctionAssets[_assetID].ID = _assetID;
         _auctionAssets[_assetID].minBid = _minBid;
         _auctionAssets[_assetID].tokenPayable = _tokenContractERC20;
-        _auctionAssets[_assetID].seller = payable(msg.sender);
+        _auctionAssets[_assetID].seller = msg.sender;
         _auctionAssets[_assetID].startAt = _startAt;
         _auctionAssets[_assetID].endAt = _endAt;
         _auctionAssets[_assetID].listed = true;
-        _auctionAssets[_assetID].nftAddress = _nftAddress;
+        _auctionAssets[_assetID].NFT = _nftAddress;
 
         emit TransferReceivedNFT(msg.sender, _assetID);
         emit AssetListed(msg.sender, _assetID, _minBid, _tokenContractERC20);
@@ -199,7 +195,7 @@ contract EnglishAuction is Ownable, ReentrancyGuard {
 
         if (_auctionAssets[_assetID].highestBidder != address(0)) {
             token.transfer(
-                _auctionAssets[_assetID].highestBidder,
+                payable(_auctionAssets[_assetID].highestBidder),
                 _auctionAssets[_assetID].highestBid
             );
             emit TransferSentToken(
@@ -223,7 +219,7 @@ contract EnglishAuction is Ownable, ReentrancyGuard {
         );
 
         _auctionAssets[_assetID].highestBid = _bid;
-        _auctionAssets[_assetID].highestBidder = payable(msg.sender);
+        _auctionAssets[_assetID].highestBidder = msg.sender;
         _auctionAssets[_assetID].bidsCount++;
 
         emit Bid(
@@ -296,7 +292,8 @@ contract EnglishAuction is Ownable, ReentrancyGuard {
      *   or auction winner that didn’t place his earned NFT on auction. During the auction NFT can’t be withdrawn.
      */
     function withdrawNft(uint256 _assetID) private {
-        setNFTcontract(_auctionAssets[_assetID].nftAddress);
+        nft = TokenERC721(_auctionAssets[_assetID].NFT);
+
         nft.safeTransferFrom(
             address(this),
             _auctionAssets[_assetID].seller,
