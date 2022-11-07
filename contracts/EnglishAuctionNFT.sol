@@ -301,7 +301,7 @@ contract EnglishAuction is Ownable, ReentrancyGuard {
         );
         emit TransferSentNFT(_auctionAssets[_assetID].seller, _assetID);
 
-        _auctionAssets[_assetID].seller = _auctionAssets[_assetID].buyer;
+        _auctionAssets[_assetID].buyer = _auctionAssets[_assetID].seller;
         _auctionAssets[_assetID].listed = false;
     }
 }

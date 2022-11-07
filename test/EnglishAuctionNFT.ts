@@ -1,8 +1,10 @@
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { time, loadFixture } from "@nomicfoundation/hardhat-network-helpers";
+import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { connect } from "http2";
+
+// import { connect } from "http2";
 
 describe("EnglishAuction", function () {
   async function deployEnglishAuction() {
@@ -26,6 +28,37 @@ describe("EnglishAuction", function () {
   }
 
   // beforeEach(async function () {});
+
+  it("Should not bid on auction correctly", async function () {
+    const { token, auction, nft, owner, acc1, acc2, startAt, endAt } =
+      await loadFixture(deployEnglishAuction);
+
+    const assetID_1 = 1;
+
+    await nft.connect(owner).safeMint(acc1.address, assetID_1);
+    await nft.connect(acc1).approve(auction.address, assetID_1);
+
+    await token.increaseAllowance(auction.address, 100);
+    await token.increaseAllowance(acc2.address, 100);
+
+    await token.connect(owner).mint(acc2.address, 100);
+
+    await token.connect(acc2).approve(auction.address, 100);
+
+    await expect(
+      auction
+        .connect(acc1)
+        .listAsset(assetID_1, token.address, nft.address, 10, startAt, endAt)
+    )
+      .to.emit(auction, "AssetListed")
+      .withArgs(acc1.address, assetID_1, 10, token.address);
+
+    await time.increaseTo(endAt + 24 * 60 * 60);
+
+    await expect(
+      auction.connect(acc2).placeBid(assetID_1, 100)
+    ).to.be.revertedWith("auction ended");
+  });
 
   describe("list asset", function () {
     it("Should bid and win auction correctly", async function () {
@@ -62,6 +95,12 @@ describe("EnglishAuction", function () {
           .connect(acc1)
           .listAsset(assetID_1, token.address, nft.address, 10, endAt, startAt)
       ).to.be.revertedWith("ends after starts only");
+
+      await expect(
+        auction
+          .connect(acc2)
+          .listAsset(assetID_1, token.address, nft.address, 10, startAt, endAt)
+      ).to.be.revertedWith("only owner");
 
       await expect(
         auction
@@ -147,7 +186,7 @@ describe("EnglishAuction", function () {
 
       await expect(auction.connect(owner).finishAuction(assetID_1))
         .to.emit(auction, "Withdraw")
-        .withArgs(assetID_1, "0x0000000000000000000000000000000000000000");
+        .withArgs(assetID_1, acc1.address);
     });
 
     it("Should bid and loose auction correctly", async function () {
